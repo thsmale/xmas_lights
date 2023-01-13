@@ -1,23 +1,7 @@
 #include <avr/sleep.h>
 
-/*
- * BLUE
- * RED
- * GREEN
- * GROUND
-*/
-
-
-/*
-RED 
-Ground
-Green
-Blue
-*/
-
-
-int red_pin = 3;
-int green_pin = 5;
+int red_pin = 5;
+int green_pin = 3;
 int blue_pin = 6;
 const int STEP = 2;
 const int DELAY_TIME = 50;
@@ -26,13 +10,11 @@ const int MAX = 255;
 const int STROBE = 100; //miliseconds
 int mode = 0;
 
-//Non blocking delay, a little better
-//Time in milliseconds
-void wait(int time) {
-  int start = millis();
-  while(millis() - start <= time);
-}
-
+/*
+ * pin: 3, 5, 6, 9, 10, 11 as they support PWM
+ * time: (milliseconds) how long to wait until the brightness is increased 
+ * step: [0, 255] how much to increase the brightness by
+*/
 void brighten(int pin, int time, int step) {
   int i = MIN; 
   while (i < 256) {
@@ -53,9 +35,6 @@ void fade(int pin, int time, int step) {
 
 //Red and green fade 
 //Very slowly
-//TODO: replace with something more different than dynamic fade
-//like dynamic flash
-//TODO need formula to calculate loop speed
 void rg_fade() {
   brighten(red_pin, 250, 1);
   fade(red_pin, 250, 1);
@@ -109,28 +88,29 @@ void rgy() {
 
 
 //red green blue yellow purple
-void rgbyp() {
+void rgbyp(int time) {
   //red
   digitalWrite(red_pin, HIGH);
-  delay(2000);
+  delay(time);
   //purple
   digitalWrite(blue_pin, HIGH);
-  delay(2000);
+  delay(time);
   //blue
   digitalWrite(red_pin, LOW);
-  delay(2000);
+  delay(time);
   //green
   digitalWrite(blue_pin, LOW);
   digitalWrite(green_pin, HIGH);
-  delay(2000);
+  delay(time);
   //yellow
   digitalWrite(red_pin, HIGH);
-  delay(2000);
+  delay(time);
   digitalWrite(green_pin, LOW);
 }
 
 //Strobe && fade
 //Red && green
+// TODO: increase speed and brightness porpotinally 
 void fade_strobe() {
   for (int j = 0; j < 3; ++j) {
     for(int i = MIN; i < MAX; i += STEP) {
@@ -161,7 +141,7 @@ void reset_pins() {
 
 // crazy functions.. played every 10 min
 // Doesn't turn off all the way 
-void glow(pin) {
+void glow(int pin) {
     int x = 25;
     int step = 5;
     int time = 10;
@@ -175,6 +155,72 @@ void glow(pin) {
     }
 }
 
+void rg_glow() {
+  for (int i = 0; i < 100; ++i) {
+    glow(red_pin);
+    digitalWrite(red_pin, LOW);
+    glow(green_pin);
+    digitalWrite(green_pin, LOW);    
+  }
+}
+
+// Fibonacci sequence up to MAX
+void fibonacci() {
+  for (int t = 0; t < 10; t++) {
+    int i = 0, j = 1, k = 0;
+    int time = 250;
+    while(k <= MAX) {
+      digitalWrite(green_pin, LOW);
+      analogWrite(red_pin, i);
+      delay(time);
+      digitalWrite(red_pin, LOW);
+      analogWrite(green_pin, j);
+      delay(time);
+      k = i + j;
+      i = j;
+      j = k;
+    }
+    // traverse
+    digitalWrite(red_pin, LOW);
+    digitalWrite(green_pin, LOW);
+    delay(1000);
+  }
+}
+
+// Gaussian distribution
+// Adjust the mean, stdev, etc
+
+void rando() {
+  randomSeed(420);
+  for(int i = 0; i < 100; ++i) {
+    digitalWrite(red_pin, LOW);
+    digitalWrite(green_pin, LOW);
+    int brightness = random(MIN, MAX);
+    int time = random(100, 2000);
+    int pin = random(0, 3);
+    if (pin == 0) {
+      pin = red_pin;
+    } else if (pin == 1) {
+      pin = green_pin;
+    } else {
+      //yellow
+      digitalWrite(red_pin, HIGH);
+      analogWrite(green_pin, 70);
+      delay(time);
+      continue;
+    }
+    analogWrite(pin, brightness);
+    delay(time);
+  }  
+}
+
+// merry christmas in morse code 
+// fastest way you can analog while human can see
+
+void rgbyp_flash() {
+  //rgbyp
+}
+
 // color flash
 
 
@@ -184,35 +230,6 @@ Do new task every 15 minutes or something
 Do task at new hour
 Run from 6pm-12am
 */
-unsigned long int time = 0;
-unsigned long int seconds = 0;
-unsigned long int minutes = 0;
-unsigned long int hours = 0;
-unsigned long int days = 0;
-
-unsigned long int ms_to_seconds(int milliseconds) {
-  return milliseconds / (unsigned long) 1000;
-}
-
-unsigned long int ms_to_minutes(int milliseconds) {
-  return ms_to_seconds(milliseconds) / (unsigned long) 60; 
-}
-
-unsigned long int ms_to_hours(int milliseconds) {
-  return ms_to_minutes(milliseconds) / (unsigned long) 60;
-}
-
-unsigned long int ms_to_days(int milliseconds) {
-  return ms_to_hours(milliseconds) / (unsigned long) 24;
-}
-
-void set_time(int ms) {
-  time = ms;
-  seconds = ms_to_seconds(ms);
-  minutes = ms_to_minutes(ms);
-  hours = ms_to_hours(ms);
-  days = ms_to_days(ms);
-}
 
 void setup() {
   // setup rgb pins
@@ -220,14 +237,7 @@ void setup() {
   pinMode(green_pin, OUTPUT);
   pinMode(blue_pin, OUTPUT);
   reset_pins();
-  // Get current time
-  Serial.begin(9600);
-  /*
-  Serial.print("CMOOONN");
-  Serial.println();
-  Serial.println("AYYYYY");
-  */
-  time = millis();
+  Serial.begin(9600); // for sending print statements to console
 }
 
 unsigned long int minute = 60000;
@@ -237,12 +247,10 @@ unsigned long int prev_millis = 0;
 unsigned long int cur_millis = 0;
 unsigned long int on_interval = hour; //hour * 6
 unsigned long int prev_day = 0;
+
 void loop() {
   cur_millis = millis();
-  while(1) {
 
-  }
-  
   /*
     Will finish after 6 hours plus some change
     Calculate the offset then apply to 18 hours
@@ -276,46 +284,24 @@ void loop() {
   }
 
   if (mode == 0) {
-    //Serial.println("rg_fade");
-    /*
-    digitalWrite(red_pin, HIGH);
-    delay(1000);
-    digitalWrite(red_pin, LOW);
-    delay(1000);
-    */
     rg_fade();
   } else if(mode == 1) {
-    //Serial.println("rg_fade_inverse");
-    //digitalWrite(green_pin, HIGH);
     rg_fade_inverse();
   } else if(mode == 2) {
-    //Serial.println("gr_fade_inverse");
-    //digitalWrite(blue_pin, HIGH);
     gr_fade_inverse();
   } else if(mode == 3) {
-    //Serial.println("dynamic_fade");
     dynamic_fade();
   } else if(mode == 4) {
-    //Serial.println("rgy");
-    //digitalWrite(red_pin, HIGH);
-    //digitalWrite(blue_pin, HIGH);
     rgy();
   } else if(mode == 5) {
-    //Serial.println("rgbyp");
-    //digitalWrite(green_pin, HIGH);
-    //digitalWrite(blue_pin, HIGH);
-    rgbyp();
+    rgbyp(2000);
   } else {
-    //Serial.println("fade_strobe");
-    //digitalWrite(red_pin, HIGH);
-    //digitalWrite(green_pin, HIGH);
-    //digitalWrite(blue_pin, HIGH);
     fade_strobe();
+    for(int i = 0; i < 10; i++) {
+      fibonacci();
+    }
     mode = 0;
   }
-
-  
-
 
   /*
    *orange
